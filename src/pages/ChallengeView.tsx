@@ -20,7 +20,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import {
   Challenge,
   ChallengeLevel,
@@ -33,7 +33,24 @@ import { Clock, Users, Trophy, Download } from "lucide-react";
 interface STLAnalysis {
   volume: number;
   surfaceArea: number;
+  dimensionalAccuracy?: number;
+  geometryMatch?: number;
 }
+
+// Mock reference STL data for comparison
+const referenceSTLData = {
+  volume: 2845.67, // mm³
+  surfaceArea: 1247.89, // mm²
+  criticalDimensions: {
+    pitchDiameter: 48.0, // mm (24 teeth × 2mm module)
+    outsideDiameter: 52.0, // mm
+    hubDiameter: 30.0, // mm
+    hubLength: 15.0, // mm
+    keywayWidth: 6.0, // mm
+    keywayDepth: 6.0, // mm
+  },
+};
+
 // Mock challenge data
 const challengeData: Challenge = {
   id: "1",
@@ -100,10 +117,10 @@ const ChallengeView = () => {
   const [timerActive, setTimerActive] = useState(true);
 
   // State for file uploads
-
   const [stlFile, setStlFile] = useState<File | null>(null);
   const [stlAnalysis, setStlAnalysis] = useState<STLAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [notes, setNotes] = useState("");
 
   // State for quiz answers
   const [answers, setAnswers] = useState<Record<string, number>>({});
@@ -136,23 +153,19 @@ const ChallengeView = () => {
   const calculateSurfaceArea = (vertices: number[][], normals: number[][]) => {
     let totalArea = 0;
     for (let i = 0; i < vertices.length; i += 3) {
-      // Calculate area of each triangle using cross product
       const v1 = vertices[i];
       const v2 = vertices[i + 1];
       const v3 = vertices[i + 2];
 
       const vec1 = [v2[0] - v1[0], v2[1] - v1[1], v2[2] - v1[2]];
-
       const vec2 = [v3[0] - v1[0], v3[1] - v1[1], v3[2] - v1[2]];
 
-      // Cross product
       const cross = [
         vec1[1] * vec2[2] - vec1[2] * vec2[1],
         vec1[2] * vec2[0] - vec1[0] * vec2[2],
         vec1[0] * vec2[1] - vec1[1] * vec2[0],
       ];
 
-      // Area = 1/2 * magnitude of cross product
       const area =
         Math.sqrt(
           cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]
@@ -165,7 +178,6 @@ const ChallengeView = () => {
 
   const calculateVolume = (vertices: number[][]) => {
     let volume = 0;
-    // Calculate volume using signed tetrahedra method
     for (let i = 0; i < vertices.length; i += 3) {
       const v1 = vertices[i];
       const v2 = vertices[i + 1];
@@ -178,6 +190,66 @@ const ChallengeView = () => {
         6.0;
     }
     return Math.abs(volume);
+  };
+
+  const calculateDimensionalAccuracy = (submittedAnalysis: STLAnalysis) => {
+    // Compare volume and surface area with reference
+    const volumeAccuracy = Math.max(
+      0,
+      100 -
+        (Math.abs(submittedAnalysis.volume - referenceSTLData.volume) /
+          referenceSTLData.volume) *
+          100
+    );
+    const surfaceAccuracy = Math.max(
+      0,
+      100 -
+        (Math.abs(
+          submittedAnalysis.surfaceArea - referenceSTLData.surfaceArea
+        ) /
+          referenceSTLData.surfaceArea) *
+          100
+    );
+
+    // Average the accuracies
+    return (volumeAccuracy + surfaceAccuracy) / 2;
+  };
+
+  const calculateGeometryMatch = (submittedAnalysis: STLAnalysis) => {
+    // Simulate geometry matching based on volume ratio and surface area ratio
+    const volumeRatio = submittedAnalysis.volume / referenceSTLData.volume;
+    const surfaceRatio =
+      submittedAnalysis.surfaceArea / referenceSTLData.surfaceArea;
+
+    // Ideal ratios should be close to 1
+    const volumeScore = Math.max(0, 100 - Math.abs(1 - volumeRatio) * 100);
+    const surfaceScore = Math.max(0, 100 - Math.abs(1 - surfaceRatio) * 100);
+
+    // Weight volume more heavily as it's more critical for functionality
+    return volumeScore * 0.7 + surfaceScore * 0.3;
+  };
+
+  const calculateTimeScore = (timeInSeconds: number) => {
+    // Time scoring: Max 30 points
+    // Excellent: < 10 min (30 pts), Good: < 15 min (25 pts), Average: < 20 min (20 pts)
+    // Fair: < 30 min (15 pts), Poor: > 30 min (10 pts)
+
+    const timeInMinutes = timeInSeconds / 60;
+
+    if (timeInMinutes < 10) return 30;
+    if (timeInMinutes < 15) return 25;
+    if (timeInMinutes < 20) return 20;
+    if (timeInMinutes < 30) return 15;
+    return 10;
+  };
+
+  const calculateQuizScore = (userAnswers: Record<string, number>) => {
+    // Quiz scoring: Max 20 points
+    const correctAnswers = quizQuestions.filter(
+      (q) => userAnswers[q.id] === q.correctAnswer
+    ).length;
+
+    return Math.round((correctAnswers / quizQuestions.length) * 20);
   };
 
   const parseSTLFile = (file: File) => {
@@ -212,19 +284,23 @@ const ChallengeView = () => {
           offset += 50;
         }
 
+        const volume = calculateVolume(meshData.vertices);
+        const surfaceArea = calculateSurfaceArea(
+          meshData.vertices,
+          meshData.normals
+        );
+
         const analysis: STLAnalysis = {
-          volume: calculateVolume(meshData.vertices),
-          surfaceArea: calculateSurfaceArea(
-            meshData.vertices,
-            meshData.normals
-          ),
+          volume,
+          surfaceArea,
+          dimensionalAccuracy: calculateDimensionalAccuracy({
+            volume,
+            surfaceArea,
+          }),
+          geometryMatch: calculateGeometryMatch({ volume, surfaceArea }),
         };
 
         setStlAnalysis(analysis);
-        toast({
-          title: "STL Analysis Complete",
-          description: "File validated and analyzed successfully",
-        });
       } catch (error) {
         console.error("STL parsing error:", error);
         toast({
@@ -242,7 +318,9 @@ const ChallengeView = () => {
 
   const handleStlFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setStlFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setStlFile(file);
+      parseSTLFile(file);
     }
   };
 
@@ -255,10 +333,10 @@ const ChallengeView = () => {
 
   const handleSubmit = () => {
     // Validate all required components are completed
-    if (!stlFile) {
+    if (!stlFile || !stlAnalysis) {
       toast({
         title: "Missing file",
-        description: "Please upload an STL file",
+        description: "Please upload and analyze an STL file",
         variant: "destructive",
       });
       return;
@@ -276,27 +354,66 @@ const ChallengeView = () => {
     // Stop timer
     setTimerActive(false);
 
-    // Create submission payload
-    const submission = {
-      challengeId: id,
-      timeElapsed,
-      answers,
-      stlAnalysis: stlAnalysis,
-      stlFile: stlFile.name,
+    // Calculate scores
+    const timeScore = calculateTimeScore(timeElapsed);
+    const quizScore = calculateQuizScore(answers);
+    const accuracyScore = Math.round(
+      ((stlAnalysis.dimensionalAccuracy! + stlAnalysis.geometryMatch!) / 2) *
+        0.5
+    ); // Max 50 points
+    const finalScore = timeScore + quizScore + accuracyScore;
+
+    // Prepare quiz analysis
+    const answerAnalysis = {
+      correctAnswers: quizQuestions.filter(
+        (q) => answers[q.id] === q.correctAnswer
+      ).length,
+      totalQuestions: quizQuestions.length,
+      details: quizQuestions.map((q) => ({
+        question: q.question,
+        userAnswer: q.options[answers[q.id]],
+        correctAnswer: q.options[q.correctAnswer],
+        isCorrect: answers[q.id] === q.correctAnswer,
+      })),
     };
 
-    // In a real app, would upload files and submit data to server
-    console.log("Submitting:", submission);
+    // Mock performance metrics
+    const performanceMetrics = {
+      rank: Math.floor(Math.random() * 100 + 1).toString(),
+      percentile: Math.max(50, finalScore + Math.random() * 20),
+      averageTime: 1320, // 22 minutes in seconds
+      bestTime: 542, // 9:02 in seconds
+    };
+
+    // Create comprehensive results
+    const results = {
+      challengeId: id!,
+      timeElapsed,
+      finalScore,
+      timeScore,
+      accuracyScore,
+      quizScore,
+      stlAnalysis: {
+        volume: stlAnalysis.volume,
+        surfaceArea: stlAnalysis.surfaceArea,
+        dimensionalAccuracy: stlAnalysis.dimensionalAccuracy!,
+        geometryMatch: stlAnalysis.geometryMatch!,
+      },
+      answerAnalysis,
+      performanceMetrics,
+    };
+
+    console.log("Submitting challenge with results:", results);
 
     toast({
       title: "Challenge submitted!",
-      description: `You completed this challenge in ${formatTime(timeElapsed)}`,
+      description: `Final score: ${finalScore}/100 in ${formatTime(
+        timeElapsed
+      )}`,
     });
 
-    // Redirect to results or back to challenges
-    setTimeout(() => {
-      navigate("/practice");
-    }, 2000);
+    // Navigate to results page with results data
+    navigate("/challenge-results", { state: { results } });
   };
 
   const handleGiveUp = () => {
@@ -553,11 +670,26 @@ const ChallengeView = () => {
                             <p className="text-xs text-gray-500 dark:text-gray-400">
                               {(stlFile.size / 1024 / 1024).toFixed(2)} MB
                             </p>
+                            {isAnalyzing && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                Analyzing...
+                              </p>
+                            )}
+                            {stlAnalysis && (
+                              <div className="mt-2 text-xs space-y-1">
+                                <p className="text-green-600">
+                                  ✓ Analysis Complete
+                                </p>
+                              </div>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
                               className="mt-2"
-                              onClick={() => setStlFile(null)}
+                              onClick={() => {
+                                setStlFile(null);
+                                setStlAnalysis(null);
+                              }}
                             >
                               Remove
                             </Button>
@@ -597,6 +729,8 @@ const ChallengeView = () => {
                       <Textarea
                         placeholder="Add any comments or notes about your solution..."
                         className="min-h-[100px]"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
                       />
                     </div>
                   </div>
@@ -611,6 +745,8 @@ const ChallengeView = () => {
                     onClick={handleSubmit}
                     disabled={
                       !stlFile ||
+                      !stlAnalysis ||
+                      isAnalyzing ||
                       Object.keys(answers).length < quizQuestions.length
                     }
                   >

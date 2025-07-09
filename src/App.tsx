@@ -23,6 +23,7 @@ import ContestManagementPage from "./pages/ContestManagementPage";
 import ContestJoinPage from "./pages/ContestJoinPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import LeaderboardPage from "./pages/Leaderboard";
+import ChallengeResults from "./pages/ChallengeResult";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +68,7 @@ const App = () => {
             {/* <Route path="/dashboard" element={<Dashboard />} /> */}
             <Route path="/practice" element={<Practice />} />
             <Route path="/challenge/:id" element={<ChallengeView />} />
+            <Route path="/challenge-results" element={<ChallengeResults />} />
             <Route path="/competitions" element={<Competitions />} />
             <Route path="/competitions/:id" element={<CompetitionDetail />} />
             <Route path="/documentation" element={<Documentation />} />

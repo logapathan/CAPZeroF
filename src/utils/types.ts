@@ -1,7 +1,6 @@
-
 export enum UserRole {
   STUDENT = "student",
-  ORGANIZATION = "organization"
+  ORGANIZATION = "organization",
 }
 
 export interface User {
@@ -40,29 +39,6 @@ export interface Achievement {
   description: string;
   iconUrl: string;
   earnedAt: Date;
-}
-
-export enum ChallengeLevel {
-  BEGINNER = "beginner",
-  INTERMEDIATE = "intermediate",
-  ADVANCED = "advanced",
-  EXPERT = "expert"
-}
-
-export enum ChallengeStatus {
-  DRAFT = "draft",
-  PUBLISHED = "published",
-  ARCHIVED = "archived"
-}
-
-export enum ChallengeType {
-  RACE_AGAINST_TIME = "race-against-time",
-  CREATIVE = "creative"
-}
-
-export enum ChallengeVisibility {
-  PUBLIC = "public",
-  PRIVATE = "private"
 }
 
 export interface Challenge {
@@ -174,4 +150,50 @@ export interface ContestInviteLink {
   usageCount: number;
   maxUsage?: number;
   isActive: boolean;
+}
+
+export enum ChallengeLevel {
+  BEGINNER = "beginner",
+  INTERMEDIATE = "intermediate",
+  ADVANCED = "advanced",
+  EXPERT = "expert",
+}
+
+export enum ChallengeType {
+  RACE_AGAINST_TIME = "race_against_time",
+  ACCURACY_FOCUSED = "accuracy_focused",
+  CREATIVE_DESIGN = "creative_design",
+  PROBLEM_SOLVING = "problem_solving",
+}
+
+export enum ChallengeVisibility {
+  PUBLIC = "public",
+  PRIVATE = "private",
+  ORGANIZATION_ONLY = "organization_only",
+}
+
+export enum ChallengeStatus {
+  DRAFT = "draft",
+  PUBLISHED = "published",
+  ARCHIVED = "archived",
+}
+
+export interface Challenge {
+  id: string;
+  title: string;
+  description: string;
+  instructions: string;
+  level: ChallengeLevel;
+  type: ChallengeType;
+  visibility: ChallengeVisibility;
+  points: number;
+  thumbnailUrl: string;
+  status: ChallengeStatus;
+  creatorId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  startDate: Date;
+  endDate: Date;
+  submissionCount: number;
+  successRate: number;
 }
